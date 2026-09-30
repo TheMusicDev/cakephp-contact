@@ -1,0 +1,16 @@
+{
+    "name": "themusicdev/cakephp-contact",
+    "description": "Contact-form intake for TheMusicDev CakePHP sites: inquiries table + honeypot/timing spam intake seam",
+    "type": "cakephp-plugin",
+    "version": "1.0.0",
+    "license": "MIT",
+    "require": {
+        "php": ">=8.2",
+        "cakephp/cakephp": "^5.2"
+    },
+    "autoload": {
+        "psr-4": {
+            "TheMusicDev\\Contact\\": "src/"
+        }
+    }
+}
