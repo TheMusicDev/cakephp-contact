@@ -11,17 +11,17 @@ use TheMusicDev\Contact\Model\Entity\Inquiry;
  * POST route calls it), listed and triaged in the host's admin.
  *
  * @extends \Cake\ORM\Table<array{Timestamp: \Cake\ORM\Behavior\TimestampBehavior}, \TheMusicDev\Contact\Model\Entity\Inquiry>
- * @method \Cake\Datasource\ResultSetInterface<int, Inquiry>|false saveMany(iterable<Inquiry> $entities, array<string, mixed> $options = [])
- * @method \Cake\Datasource\ResultSetInterface<int, Inquiry> saveManyOrFail(iterable<Inquiry> $entities, array<string, mixed> $options = [])
- * @method \Cake\Datasource\ResultSetInterface<int, Inquiry>|false deleteMany(iterable<Inquiry> $entities, array<string, mixed> $options = [])
- * @method \Cake\Datasource\ResultSetInterface<int, Inquiry> deleteManyOrFail(iterable<Inquiry> $entities, array<string, mixed> $options = [])
+ * @method \Cake\Datasource\ResultSetInterface<int, \TheMusicDev\Contact\Model\Entity\Inquiry>|false saveMany(iterable<\TheMusicDev\Contact\Model\Entity\Inquiry> $entities, array<string, mixed> $options = [])
+ * @method \Cake\Datasource\ResultSetInterface<int, \TheMusicDev\Contact\Model\Entity\Inquiry> saveManyOrFail(iterable<\TheMusicDev\Contact\Model\Entity\Inquiry> $entities, array<string, mixed> $options = [])
+ * @method \Cake\Datasource\ResultSetInterface<int, \TheMusicDev\Contact\Model\Entity\Inquiry>|false deleteMany(iterable<\TheMusicDev\Contact\Model\Entity\Inquiry> $entities, array<string, mixed> $options = [])
+ * @method \Cake\Datasource\ResultSetInterface<int, \TheMusicDev\Contact\Model\Entity\Inquiry> deleteManyOrFail(iterable<\TheMusicDev\Contact\Model\Entity\Inquiry> $entities, array<string, mixed> $options = [])
  * @mixin \Cake\ORM\Behavior\TimestampBehavior
- * @method Inquiry newEntity(array<string, mixed> $data, array<string, mixed> $options = [])
- * @method Inquiry[] newEntities(array<array<string, mixed>> $data, array<string, mixed> $options = [])
- * @method Inquiry get(mixed $primaryKey, array<string, mixed>|string $finder = 'all', \Psr\SimpleCache\CacheInterface|string|null $cache = null, \Closure|string|null $cacheKey = null, mixed ...$args)
- * @method Inquiry findOrCreate(\Cake\ORM\Query\SelectQuery<Inquiry>|callable|array<string, mixed> $search, ?callable $callback = null, array<string, mixed> $options = [])
- * @method Inquiry patchEntity(\Cake\Datasource\EntityInterface $entity, array<string, mixed> $data, array<string, mixed> $options = [])
- * @method Inquiry[] patchEntities(iterable<Inquiry> $entities, array<array<string, mixed>> $data, array<string, mixed> $options = [])
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry newEntity(array<string, mixed> $data, array<string, mixed> $options = [])
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry[] newEntities(array<array<string, mixed>> $data, array<string, mixed> $options = [])
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry get(mixed $primaryKey, array<string, mixed>|string $finder = 'all', \Psr\SimpleCache\CacheInterface|string|null $cache = null, \Closure|string|null $cacheKey = null, mixed ...$args)
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry findOrCreate(\Cake\ORM\Query\SelectQuery<\TheMusicDev\Contact\Model\Entity\Inquiry>|callable|array<string, mixed> $search, ?callable $callback = null, array<string, mixed> $options = [])
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry patchEntity(\Cake\Datasource\EntityInterface $entity, array<string, mixed> $data, array<string, mixed> $options = [])
+ * @method \TheMusicDev\Contact\Model\Entity\Inquiry[] patchEntities(iterable<\TheMusicDev\Contact\Model\Entity\Inquiry> $entities, array<array<string, mixed>> $data, array<string, mixed> $options = [])
  */
 final class InquiriesTable extends Table
 {
@@ -33,11 +33,11 @@ final class InquiriesTable extends Table
         $this->setTable('inquiries');
         $this->setPrimaryKey('id');
         $this->setEntityClass(Inquiry::class);
-        // ponytail: no `modified` column in the schema — update events would
+        // Note: no `modified` column in the schema — update events would
         // break saves. Only `created` is stamped.
         $this->addBehavior('Timestamp', ['events' => ['Model.beforeSave' => ['created' => 'new']]]);
 
-        // The worker's field length caps, ported as validation — oversized
+        // Field length caps as validation — oversized
         // payloads are a scraper signal and never become rows.
         $this->getValidator('default')
             ->requirePresence(['name', 'email', 'message'])

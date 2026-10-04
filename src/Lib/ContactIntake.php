@@ -4,14 +4,13 @@ declare(strict_types=1);
 namespace TheMusicDev\Contact\Lib;
 
 use Cake\Core\Configure;
+use Cake\Datasource\EntityInterface;
 use Cake\Http\ServerRequest;
 use Cake\ORM\TableRegistry;
-use TheMusicDev\Contact\Model\Entity\Inquiry;
 
 /**
  * Contact intake — the plugin's domain seam for the public contact form
- * (host route, usually POST /contact, JSON or form body). Owns every rule
- * the monorepo's Cloudflare Worker pinned:
+ * (host route, usually POST /contact, JSON or form body). Owns these rules:
  *
  * - field whitelist 1:1 — only recognized keys become row fields; anything
  *   else in the payload is ignored.
@@ -22,7 +21,7 @@ use TheMusicDev\Contact\Model\Entity\Inquiry;
  *   treated as missing (int32 column + clock-skew garbage); deltas under
  *   `Contact.min_submit_ms` flag the row spam, still saved.
  * - provenance captured server-side, never from the form: ip (XFF first
- *   hop — the shared host sits behind a CDN/proxy), user agent, referrer,
+ *   hop — a host behind a CDN/proxy only sees the proxy's address), user agent, referrer,
  *   locale, landing page.
  *
  * Unlike ApplyIntake (rejects bot clocks outright) the contact form keeps
@@ -36,7 +35,7 @@ final class ContactIntake
     /**
      * Process one submission.
      *
-     * @return array{status: string, entity: Inquiry|null, errors: array<string, string>}
+     * @return array{status: string, entity: \TheMusicDev\Contact\Model\Entity\Inquiry|null, errors: array<string, string>}
      *     status: 'ok' (saved, new) | 'spam' (saved as spam) | 'rejected'
      *     (required fields missing, nothing saved) | 'invalid' (validation
      *     failure, nothing saved)
@@ -44,13 +43,12 @@ final class ContactIntake
     public static function intake(ServerRequest $request): array
     {
         $data = (array)$request->getParsedBody();
-        $isNonEmptyString = static fn (mixed $value): bool => is_string($value) && trim($value) !== '';
+        $isNonEmptyString = static fn(mixed $value): bool => is_string($value) && trim($value) !== '';
 
         $honeypotField = self::honeypotField();
-        $invalid = static fn (array $errors): array =>
-            ['status' => 'invalid', 'entity' => null, 'errors' => $errors];
+        $invalid = static fn(array $errors): array => ['status' => 'invalid', 'entity' => null, 'errors' => $errors];
 
-        // Whitelist shape first, like the worker — required trio present.
+        // Whitelist shape first — required trio present.
         if (
             !$isNonEmptyString($data['name'] ?? null)
             || !$isNonEmptyString($data['email'] ?? null)
@@ -65,6 +63,7 @@ final class ContactIntake
         $isSpam = $honeypotValue !== null
             || ($durationMs !== null && $durationMs < self::minSubmitMs());
 
+        /** @var \TheMusicDev\Contact\Model\Table\InquiriesTable $inquiries */
         $inquiries = TableRegistry::getTableLocator()->get('TheMusicDev/Contact.Inquiries');
         $entity = $inquiries->newEntity([
             'name' => trim((string)$data['name']),
@@ -88,7 +87,7 @@ final class ContactIntake
         }
 
         $entity->status = $isSpam ? 'spam' : 'new';
-        $saved = $inquiries->save($entity); // never false: errors are checked above
+        $entity = $inquiries->saveOrFail($entity); // validation was checked above, so a failure here is a bug
 
         return [
             'status' => $isSpam ? 'spam' : 'ok',
@@ -103,14 +102,14 @@ final class ContactIntake
         return (string)Configure::read('Contact.honeypot_field', 'company');
     }
 
-    /** bot-signal floor on the submit clock (worker's 500ms). */
+    /** bot-signal floor on the submit clock. */
     private static function minSubmitMs(): int
     {
         return (int)Configure::read('Contact.min_submit_ms', 500);
     }
 
     /**
-     * The worker trusted any renderedAt; the DB column is int32, so deltas
+     * The client clock is untrusted; the DB column is int32, so deltas
      * outside 0..1h store null instead of overflowing.
      */
     private static function submitDurationMs(string $raw): ?int
@@ -120,7 +119,7 @@ final class ContactIntake
         }
         $delta = (int)(microtime(true) * 1000) - (int)$raw;
 
-        return ($delta >= 0 && $delta <= self::WINDOW_MS) ? $delta : null;
+        return $delta >= 0 && $delta <= self::WINDOW_MS ? $delta : null;
     }
 
     /**
@@ -145,7 +144,7 @@ final class ContactIntake
      * @param \Cake\Datasource\EntityInterface $entity
      * @return array<string, string>
      */
-    private static function flattenErrors(\Cake\Datasource\EntityInterface $entity): array
+    private static function flattenErrors(EntityInterface $entity): array
     {
         $flat = [];
         foreach ($entity->getErrors() as $field => $messages) {

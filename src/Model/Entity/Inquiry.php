@@ -6,7 +6,7 @@ namespace TheMusicDev\Contact\Model\Entity;
 use Cake\ORM\Entity;
 
 /**
- * A contact-form submission (port of the monorepo `inquiries` table). Spam
+ * A contact-form submission. Spam
  * flags live in `status` / `honeypot_value` / `submit_duration_ms`; see
  * Lib\ContactIntake for how they are set.
  *
