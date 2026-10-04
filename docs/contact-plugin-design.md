@@ -1,11 +1,12 @@
 # TheMusicDev/Contact — plugin design
 
-Contact-form intake for TheMusicDev sites: one `inquiries` table, one
-`ContactIntake` seam, no routes, no UI. Port of the monorepo's
-Cloudflare-Worker `contact-form` + its `inquiries` drizzle table, extracted
-from the cakephp-tmd app (which first built it as app code, migration
-20260929120000) into a reusable plugin — the same "domain owns the rules,
-host owns the markup" split Recruiting established.
+Contact-form intake for CakePHP sites: one `inquiries` table, one
+`ContactIntake` seam, no routes, no UI. It began as app code on the first
+TheMusicDev site and was extracted into this reusable plugin — the "domain owns
+the rules, host owns the markup" split.
+
+**Status:** released as 1.0.0 (2026-10-03). Public API: `Lib\ContactIntake::intake()`,
+the `TheMusicDev/Contact.Inquiries` table and `Inquiry::STATUSES`, the `Contact.*` config keys.
 
 ## Why a plugin
 
@@ -34,10 +35,9 @@ HTML/JS and the HTTP response.
 
 ### `Model/Entity/Inquiry` + `Model/Table/InquiriesTable`
 
-Moved 1:1 from the app. Table name stays `inquiries` (no data migration —
-the table already exists on every deployed DB, see below). Entity keeps
+Table name is `inquiries`. Entity keeps
 `STATUSES` const (`new`, `read`, `spam`, `archived`) — the admin allowlist
-source. Validator keeps the worker's field caps (name/email 100, phone 30,
+source. Validator has field caps (name/email 100, phone 30,
 subject 200, message 5000, email format) — oversized payloads are a scraper
 signal and never become rows. TimestampBehavior writes `created` only (the
 schema has no `modified`; `update` stamping would break status-flip saves).
@@ -45,7 +45,7 @@ schema has no `modified`; `update` stamping would break status-flip saves).
 ### `Lib/ContactIntake` — the seam
 
 Static `ContactIntake::intake(ServerRequest $request)` — one call, the
-whole worker. Returns
+whole intake. Returns
 
 ```php
 array{status: 'ok'|'spam'|'rejected'|'invalid',
@@ -54,22 +54,21 @@ array{status: 'ok'|'spam'|'rejected'|'invalid',
 ```
 
 - `rejected` — required fields (name/email/message) missing or blank.
-  Worker's 400 path; nothing saved.
+  Answer 400; nothing saved.
 - `spam` — honeypot filled or submit under `Contact.min_submit_ms`. Row IS
   saved (`status='spam'`, validated), caller answers success. Identical
   response either way — never tip bots off.
-- `invalid` — validator failure (caps, email format). Worker's 400 path.
+- `invalid` — validator failure (caps, email format). Answer 400.
 - `ok` — saved as `new`.
 
-Also owns, ported from the app's `PagesController::contact()`:
-- **Field whitelist 1:1 with the worker** — only recognized keys become row
+Also owns:
+- **Field whitelist** — only recognized keys become row
   fields; anything else in the payload is ignored.
 - **Submit clock** (`renderedAt`, ms since epoch): delta outside 0..1h is
   treated as missing (int32 column + clock-skew garbage), else recorded as
   `submit_duration_ms`.
-- **Provenance server-side**: `ip_address` (X-Forwarded-For first hop — the
-  shared host sits behind a CDN/proxy, the worker trusted
-  CF-Connecting-IP; falls back to request clientIp), `user_agent`,
+- **Provenance server-side**: `ip_address` (X-Forwarded-For first hop — a host
+  behind a CDN/proxy only sees the proxy otherwise; falls back to request clientIp), `user_agent`,
   `referrer`, `locale` (Accept-Language), `landing_page`.
 
 Host side stays three lines of glue: call `intake()`, map the four statuses
@@ -83,43 +82,27 @@ host route (CSRF middleware owns it).
 ```php
 'Contact' => [
     'honeypot_field' => 'company', // per-site honeypot input name
-    'min_submit_ms' => 500,        // worker's threshold
+    'min_submit_ms' => 500,        // bot-signal floor
 ],
 ```
 
-Nothing else earns a knob (ponytail). Hosts override the honeypot name in
+Nothing else earns a knob. Hosts override the honeypot name in
 their `config/app.php` if their form calls the field something else.
 
 ### Migration
 
-`config/Migrations/20260929120000_CreateInquiries.php` — same filename and
-schema as the app migration it replaces. **Ledger gotcha (build-time
-correction):** `cake_migrations` keys rows by `(version, plugin)`, not by
-name alone — the app copy was recorded with `plugin = NULL`, so after the
-move the plugin migration shows `down` and the app row `MISSING`. Existing
-DBs (dev + dbtest) need a one-time ledger fix:
+`config/Migrations/20260929120000_CreateInquiries.php` creates `inquiries`.
+**Ledger gotcha:** `cake_migrations` keys rows by `(version, plugin)`, not by
+name alone. A site that first ran an app-owned copy of this migration has a
+ledger row with `plugin = NULL`; after adopting the plugin the plugin migration
+shows `down` and the app row `MISSING`. Re-tag it on every such DB BEFORE
+`migrations migrate`:
 `UPDATE cake_migrations SET plugin='TheMusicDev/Contact' WHERE version='20260929120000' AND migration_name='CreateInquiries' AND plugin IS NULL;`
-(run on every DB that already ran the app version, incl. prod, BEFORE
-`migrations migrate`). Fresh DBs just create the table. No `hasTable` guard —
-it would mask real schema drift.
+Fresh DBs just create the table. No `hasTable` guard — it would mask real
+schema drift.
 
-## Host wiring (cakephp-tmd as first consumer)
+## Host side
 
-- `config/plugins.php`: `'TheMusicDev/Contact' => []`.
-- `composer.json`: path repo `plugins/TheMusicDev/Contact` + require
-  `themusicdev/cakephp-contact` — after `composer update` for the path repo.
-- `PagesController::contact()` shrinks to render + intake + JSON mapping.
-- Admin: `fetchTable('Inquiries')` → `fetchTable('TheMusicDev/Contact.Inquiries')`;
-  `templates/Admin/inquiries.php` docblock/`Inquiry::STATUSES` refs go to
-  the plugin FQCN.
-- Tests: `AdminControllerTest` + `PagesControllerTest` keep their behaviors
-  (they exercise the E2E surface), rebased on the plugin classes.
-
-## Sequencing / deploy notes
-
-1. Build plugin + rewire, `composer check` green.
-2. `rm config/Migrations/20260929120000_CreateInquiries.php` only after the
-   plugin file exists then run the ledger UPDATE above on each existing DB. Confirm with
-   `bin/cake migrations status` and `-p TheMusicDev/Contact` (both clean).
-3. On any other site that adopts the plugin: `bin/cake migrations migrate` —
-   plugin migrations load from the plugin path automatically.
+See `examples/` for a contact action, form, and admin triage list/status flip
+to copy. The host owns the route, the response contract, the admin screens
+and their auth.
