@@ -1,0 +1,20 @@
+# Test database for the plugin's own test suite (MariaDB, like production; never sqlite).
+# Port 3310 and database `contact_test` so it does not collide with an app's own `dbtest` on 3307.
+#   docker compose up -d --wait dbtest && composer test
+services:
+  dbtest:
+    image: mariadb:11.8
+    environment:
+      MYSQL_DATABASE: contact_test
+      MYSQL_USER: contact
+      MYSQL_PASSWORD: contact
+      MYSQL_ROOT_PASSWORD: contact
+    ports:
+      - "3310:3306"
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    tmpfs:
+      - /var/lib/mysql
